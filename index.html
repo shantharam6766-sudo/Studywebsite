@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    
+    <!-- Updated Favicon Links -->
+    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="StudyForExams" />
+    <link rel="manifest" href="/site.webmanifest" />
+    
+    <!-- --- CHANGE 1: THE CRITICAL VIEWPORT TAG --- -->
+    <!-- Added 'viewport-fit=cover' to enable true edge-to-edge display -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1E293B" /> <!-- A darker theme color for a seamless look -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <!-- --- CHANGE 2: THE STATUS BAR STYLE --- -->
+    <!-- 'black-translucent' allows the app to go full-screen behind the status bar -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    
+    <!-- SEO Meta Tags -->
+    <title>StudyForExams - Smart Study Management Platform</title>
+    <meta name="description" content="StudyForExams is a comprehensive study management platform featuring syllabus tracking, daily tasks, pomodoro timer, notes, and progress analytics. Boost your academic productivity today." />
+    <meta name="keywords" content="study planner, syllabus tracker, pomodoro timer, academic productivity, study management, exam preparation, student tools" />
+    <meta name="author" content="StudyForExams" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="StudyForExams - Smart Study Management Platform" />
+    <meta property="og:description" content="Comprehensive study management platform with syllabus tracking, daily tasks, pomodoro timer, and progress analytics." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://studyforexams.netlify.app" />
+    <meta property="og:site_name" content="StudyForExams" />
+     <meta property="og:image" content="https://studyforexams.netlify.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="StudyForExams - Smart Study Management Platform" />
+    <meta name="twitter:image" content="https://studyforexams.netlify.app/og-image.png" />
+    <meta name="twitter:description" content="Boost your academic productivity with our comprehensive study management tools." />
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://studyforexams.netlify.app" />
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "StudyForExams",
+      "description": "Smart study management platform for students",
+      "url": "https://studyforexams.netlify.app",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered: ', registration);
+            })
+            .catch((registrationError) => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
