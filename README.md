@@ -80,8 +80,8 @@ npm run dev
 - [x] Core study management features
 - [x] PWA implementation
 - [x] Modern UI/UX design
-- [ ] Cloud synchronization
-- [ ] User authentication
+- [x] Cloud synchronization
+- [x] User authentication
 - [ ] Syllabus database
 
 ### Phase 2 (Planned)
