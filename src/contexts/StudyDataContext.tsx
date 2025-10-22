@@ -492,7 +492,7 @@ async function fetchAllCloudData(user: User) {
 
     // Simplified error handling
     const errors = [syllabiRes.error, notesRes.error, pomodoroRes.error, tasksRes.error, examsRes.error, resourcesRes.error].filter(Boolean);
-    if (errors.length > 0) throw new Error(errors.map(e => e.message).join('\n'));
+    if (errors.length > 0) throw new Error(errors.map(e => e.message).join('\\n'));
     
     return {
         syllabi: syllabiRes.data || [],
@@ -506,23 +506,34 @@ async function fetchAllCloudData(user: User) {
 
 
 async function handleGuestToUserSync(user: User, onSyncComplete: () => Promise<void>) {
+  if (!user?.id) {
+    console.warn('handleGuestToUserSync called without a valid user ID. Aborting sync to preserve local data.');
+    return;
+  }
+
   const { count, error: countError } = await supabase.from('syllabi').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
   if (countError) { 
-    console.error('Error checking for cloud data during sync.'); 
+    console.error('Error checking for cloud data during sync:', countError); 
+    // Do not clear local storage on error
     return; 
   }
 
   if (count === 0) {
     try {
       await syncLocalToSupabase(user.id);
+      // Only clear local storage if sync is successful
+      GUEST_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
     } catch (syncError) {
-      console.error(`Error syncing guest data: ${(syncError as Error).message}`);
+      console.error(`Error syncing guest data to cloud. Local data preserved: ${(syncError as Error).message}`);
+      // Do not clear local storage if sync fails
+      return; 
     }
   } else {
     console.log('Existing user detected. Discarding local guest data.');
+    // If user already has cloud data, always clear local guest data
+    GUEST_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
   }
 
-  GUEST_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
   await onSyncComplete();
 }
 
