@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Plus, Link as LinkIcon } from 'lucide-react';
 import { useStudyData } from '../contexts/StudyDataContext';
 import ResourceItem from '../components/ResourceItem';
 
@@ -12,15 +13,15 @@ const Resources: React.FC = () => {
   const [error, setError] = useState('');
 
   const handleAddResource = () => {
-    // Validate URL
     let url = newResourceUrl;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = 'https://' + url;
     }
     
     try {
-      new URL(url);
+      new URL(url); // Basic validation
       addResource(newResourceTitle, url);
+      // Reset form
       setNewResourceTitle('');
       setNewResourceUrl('');
       setIsAddingResource(false);
@@ -29,6 +30,8 @@ const Resources: React.FC = () => {
       setError('Please enter a valid URL');
     }
   };
+
+  const safeResources = resources ?? [];
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -110,7 +113,7 @@ const Resources: React.FC = () => {
       </AnimatePresence>
 
       <AnimatePresence>
-        {resources.length === 0 ? (
+        {safeResources.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -127,7 +130,7 @@ const Resources: React.FC = () => {
           </motion.div>
         ) : (
           <div className="space-y-4">
-            {resources.map((resource) => (
+            {safeResources.map((resource) => (
               <ResourceItem key={resource.id} resource={resource} />
             ))}
           </div>

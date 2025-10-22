@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
 import { useStudyData } from './StudyDataContext';
 
 type TimerMode = 'work' | 'shortBreak' | 'longBreak';
@@ -23,371 +24,191 @@ interface PomodoroContextType {
   autoStartPomodoros: boolean;
   setAutoStartBreaks: (value: boolean) => void;
   setAutoStartPomodoros: (value: boolean) => void;
+  showConfetti: boolean;
+  isImmersive: boolean;
+  setIsImmersive: (value: boolean) => void;
   notificationsEnabled: boolean;
   setNotificationsEnabled: (value: boolean) => void;
   requestNotificationPermission: () => Promise<boolean>;
   getProgressPercentage: () => number;
   getFormattedTime: () => string;
   getSessionInfo: () => string;
-  showConfetti: boolean;
-  setShowConfetti: (show: boolean) => void;
-  isImmersive: boolean;
-  setIsImmersive: (immersive: boolean) => void;
 }
 
 const PomodoroContext = createContext<PomodoroContextType | undefined>(undefined);
 
 export function PomodoroProvider({ children }: { children: ReactNode }) {
   const { pomodoroSettings, addPomodoroSession } = useStudyData();
-  
-  // Store the start time when timer begins
-  const [startTime, setStartTime] = useState<number | null>(() => {
-    const saved = localStorage.getItem('pomodoroStartTime');
-    return saved ? parseInt(saved) : null;
-  });
-  
-  // Store the initial duration when timer starts
-  const [initialDuration, setInitialDuration] = useState(() => {
-    const saved = localStorage.getItem('pomodoroInitialDuration');
-    return saved ? parseInt(saved) : pomodoroSettings.workDuration * 60;
-  });
-  
-  const [timeLeft, setTimeLeft] = useState(() => {
-    const saved = localStorage.getItem('pomodoroTimeLeft');
-    const initialDuration = pomodoroSettings.workDuration * 60;
-    return saved ? parseInt(saved) : initialDuration;
-  });
-  
-  const [isActive, setIsActive] = useState(() => {
-    const saved = localStorage.getItem('pomodoroIsActive');
-    return saved ? JSON.parse(saved) : false;
-  });
-  
-  const [mode, setMode] = useState<TimerMode>(() => {
-    const saved = localStorage.getItem('pomodoroMode');
-    return (saved as TimerMode) || 'work';
-  });
-  
-  const [state, setState] = useState<TimerState>(() => {
-    const saved = localStorage.getItem('pomodoroState');
-    return (saved as TimerState) || 'idle';
-  });
-  
-  const [pomodoroCount, setPomodoroCount] = useState(() => {
-    const saved = localStorage.getItem('pomodoroDailyCount');
-    const today = new Date().toDateString();
-    const savedDate = localStorage.getItem('pomodoroCountDate');
-    if (savedDate === today && saved) return parseInt(saved);
-    return 0;
-  });
-  
-  const [cycleCount, setCycleCount] = useState(() => {
-    const saved = localStorage.getItem('pomodoroCycleCount');
-    return saved ? parseInt(saved) : 0;
-  });
-  
-  const [autoStartBreaks, setAutoStartBreaks] = useState(() => {
-    const saved = localStorage.getItem('pomodoroAutoStartBreaks');
-    return saved ? JSON.parse(saved) : false;
-  });
-  
-  const [autoStartPomodoros, setAutoStartPomodoros] = useState(() => {
-    const saved = localStorage.getItem('pomodoroAutoStartPomodoros');
-    return saved ? JSON.parse(saved) : false;
-  });
 
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
-    const saved = localStorage.getItem('pomodoroNotificationsEnabled');
-    return saved ? JSON.parse(saved) : (Notification.permission === 'granted');
-  });
-
+  const settings = useMemo(() => ({
+    workDuration: pomodoroSettings?.workDuration ?? 25,
+    shortBreakDuration: pomodoroSettings?.shortBreakDuration ?? 5,
+    longBreakDuration: pomodoroSettings?.longBreakDuration ?? 15,
+    sessionsPerCycle: pomodoroSettings?.sessionsPerCycle ?? 4,
+  }), [pomodoroSettings]);
+  
+  const [timeLeft, setTimeLeft] = useState(() => settings.workDuration * 60);
+  const [isActive, setIsActive] = useState(false);
+  const [mode, setMode] = useState<TimerMode>('work');
+  const [state, setState] = useState<TimerState>('idle');
+  const [pomodoroCount, setPomodoroCount] = useState(0); // Today's count
+  const [cycleCount, setCycleCount] = useState(0); // Sessions in current cycle
   const [showConfetti, setShowConfetti] = useState(false);
   const [isImmersive, setIsImmersive] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  const [autoStartBreaks, setAutoStartBreaks] = useState(() => localStorage.getItem('autoStartBreaks') === 'true');
+  const [autoStartPomodoros, setAutoStartPomodoros] = useState(() => localStorage.getItem('autoStartPomodoros') === 'true');
 
   const intervalRef = useRef<number | null>(null);
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-  
-  // LocalStorage persistence
-  useEffect(() => { localStorage.setItem('pomodoroTimeLeft', timeLeft.toString()); }, [timeLeft]);
-  useEffect(() => { localStorage.setItem('pomodoroIsActive', JSON.stringify(isActive)); }, [isActive]);
-  useEffect(() => { localStorage.setItem('pomodoroMode', mode); }, [mode]);
-  useEffect(() => { localStorage.setItem('pomodoroState', state); }, [state]);
-  useEffect(() => { localStorage.setItem('pomodoroDailyCount', pomodoroCount.toString()); }, [pomodoroCount]);
-  useEffect(() => { localStorage.setItem('pomodoroCountDate', new Date().toDateString()); }, [pomodoroCount]);
-  useEffect(() => { localStorage.setItem('pomodoroCycleCount', cycleCount.toString()); }, [cycleCount]);
-  useEffect(() => { localStorage.setItem('pomodoroAutoStartBreaks', JSON.stringify(autoStartBreaks)); }, [autoStartBreaks]);
-  useEffect(() => { localStorage.setItem('pomodoroAutoStartPomodoros', JSON.stringify(autoStartPomodoros)); }, [autoStartPomodoros]);
-  useEffect(() => { localStorage.setItem('pomodoroNotificationsEnabled', JSON.stringify(notificationsEnabled)); }, [notificationsEnabled]);
-  useEffect(() => { 
-    if (startTime !== null) {
-      localStorage.setItem('pomodoroStartTime', startTime.toString()); 
-    } else {
-      localStorage.removeItem('pomodoroStartTime');
+  const wakeLockRef = useRef<any | null>(null);
+
+  const acquireWakeLock = async () => {
+    if ('wakeLock' in navigator && !wakeLockRef.current) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('Screen Wake Lock is active.');
+      } catch (err) {
+        console.error(`${(err as Error).name}, ${(err as Error).message}`);
+      }
     }
-  }, [startTime]);
-  useEffect(() => { localStorage.setItem('pomodoroInitialDuration', initialDuration.toString()); }, [initialDuration]);
-  
-  const resetToModeDefault = () => {
+  };
+
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+      wakeLockRef.current = null;
+      console.log('Screen Wake Lock released.');
+    }
+  };
+
+  const resetToModeDefault = useCallback(() => {
     let newDuration;
     switch(mode) {
-      case 'work': newDuration = pomodoroSettings.workDuration; break;
-      case 'shortBreak': newDuration = pomodoroSettings.shortBreakDuration; break;
-      case 'longBreak': newDuration = pomodoroSettings.longBreakDuration; break;
+      case 'work': newDuration = settings.workDuration; break;
+      case 'shortBreak': newDuration = settings.shortBreakDuration; break;
+      case 'longBreak': newDuration = settings.longBreakDuration; break;
       default: newDuration = 25;
     }
-    const duration = newDuration * 60;
-    setTimeLeft(duration);
-    setInitialDuration(duration);
-  };
+    setTimeLeft(newDuration * 60);
+  }, [mode, settings]);
   
   useEffect(() => {
     if (state === 'idle') {
-        resetToModeDefault();
+      resetToModeDefault();
     }
-  }, [pomodoroSettings]);
-  
-  useEffect(() => {
-      if(!isActive) {
-          resetToModeDefault();
-      }
-  }, [mode]);
-
-  // Calculate accurate time based on real elapsed time
-  const calculateAccurateTime = () => {
-    if (!startTime || !isActive) return;
-    
-    const now = Date.now();
-    const elapsedSeconds = Math.floor((now - startTime) / 1000);
-    const newTimeLeft = Math.max(0, initialDuration - elapsedSeconds);
-    
-    setTimeLeft(newTimeLeft);
-  };
-
-  // Check for accurate time on focus/visibility change
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && isActive) {
-        calculateAccurateTime();
-      }
-    };
-
-    const handleFocus = () => {
-      if (isActive) {
-        calculateAccurateTime();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [isActive, startTime, initialDuration]);
-
-  const postMessageToSW = (message: object) => {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage(message);
-    }
-  };
+  }, [mode, state, resetToModeDefault]);
 
   const startTimer = () => {
     if (timeLeft > 0) {
-      const now = Date.now();
-      setStartTime(now);
-      setInitialDuration(timeLeft);
       setIsActive(true);
       setState('running');
-      postMessageToSW({ type: 'START_TIMER', payload: { timeLeft, mode } });
-      requestWakeLock();
+      acquireWakeLock();
     }
   };
   
   const pauseTimer = () => {
-    // When pausing, we need to update the initial duration to reflect remaining time
-    if (startTime) {
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startTime) / 1000);
-      const remainingTime = Math.max(0, initialDuration - elapsedSeconds);
-      setInitialDuration(remainingTime);
-      setTimeLeft(remainingTime);
-    }
-    setStartTime(null);
     setIsActive(false);
     setState('paused');
-    postMessageToSW({ type: 'PAUSE_RESUME_TIMER' });
     releaseWakeLock();
   };
   
   const stopTimer = () => {
-    setStartTime(null);
     setIsActive(false);
     setState('idle');
     resetToModeDefault();
-    postMessageToSW({ type: 'STOP_TIMER' });
     releaseWakeLock();
+  };
+
+  const skipSession = () => {
+      if (mode === 'work') {
+        handleTimerCompletion(true); // Pass true to indicate a skip
+      } else {
+        switchToWork();
+      }
   };
   
   const resetTimer = () => {
-    postMessageToSW({ type: 'CLOSE_WIDGET' });
-    setStartTime(null);
     setIsActive(false);
     setState('idle');
     setPomodoroCount(0);
     setCycleCount(0);
     setMode('work');
-    setTimeLeft(pomodoroSettings.workDuration * 60);
-    setInitialDuration(pomodoroSettings.workDuration * 60);
-    localStorage.setItem('pomodoroIsActive', 'false');
-    localStorage.setItem('pomodoroState', 'idle');
-    localStorage.setItem('pomodoroDailyCount', '0');
-    localStorage.setItem('pomodoroCycleCount', '0');
-    localStorage.setItem('pomodoroMode', 'work');
-    localStorage.removeItem('pomodoroStartTime');
+    setTimeLeft(settings.workDuration * 60);
     releaseWakeLock();
   };
-  
-  const skipSession = () => {
-    setStartTime(null);
-    setIsActive(false);
-    setState('idle');
-    postMessageToSW({ type: 'STOP_TIMER' });
+
+  const handleTimerCompletion = useCallback((skipped = false) => {
+    let nextMode: TimerMode;
+    let shouldAutoStart = false;
+
     if (mode === 'work') {
-      (cycleCount + 1) % 4 === 0 ? switchToLongBreak() : switchToShortBreak();
+      if (!skipped) {
+        addPomodoroSession();
+        setPomodoroCount(prev => prev + 1);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 8000);
+        if (notificationsEnabled) new Notification('Focus session complete!', { body: 'Time for a break.', icon: '/logo192.png' });
+      }
+      const newCycleCount = cycleCount + 1;
+      setCycleCount(newCycleCount);
+      nextMode = (newCycleCount % settings.sessionsPerCycle === 0) ? 'longBreak' : 'shortBreak';
+      if (autoStartBreaks) shouldAutoStart = true;
     } else {
-      switchToWork();
+      if (notificationsEnabled) new Notification('Break is over!', { body: 'Time to get back to focus.', icon: '/logo192.png' });
+      nextMode = 'work';
+      if (autoStartPomodoros) shouldAutoStart = true;
     }
-  };
+
+    if (nextMode === 'longBreak') switchToLongBreak(shouldAutoStart);
+    else if (nextMode === 'shortBreak') switchToShortBreak(shouldAutoStart);
+    else switchToWork(shouldAutoStart);
+
+  }, [mode, cycleCount, settings.sessionsPerCycle, addPomodoroSession, autoStartBreaks, autoStartPomodoros, notificationsEnabled]);
 
   useEffect(() => {
     if (isActive) {
       intervalRef.current = window.setInterval(() => {
-        calculateAccurateTime();
+        setTimeLeft(prev => prev - 1);
       }, 1000);
     } else {
       if(intervalRef.current) clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) };
-  }, [isActive, startTime, initialDuration]);
+  }, [isActive]);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (!event.data || !event.data.type) return;
-      const { type, action, mode: completedMode, path } = event.data;
-
-      if (type === 'TIMER_COMPLETE') {
-        setTimeLeft(0);
-        
-        if (completedMode === 'work') {
-          setShowConfetti(true);
-          postMessageToSW({ type: 'TRIGGER_CONFETTI' });
-          setTimeout(() => setShowConfetti(false), 5000);
-        }
-      } else if (type === 'SHOW_CONFETTI') {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
-      } else if (type === 'LIVE_TIMER_ACTION') {
-        if (action === 'pause-resume') {
-          isActive ? pauseTimer() : startTimer();
-        } else if (action === 'stop') {
-          stopTimer();
-        }
-      } else if (type === 'COMPLETION_ACTION') {
-        if (action === 'start-break') {
-          (cycleCount + 1) % 4 === 0 ? switchToLongBreak(true) : switchToShortBreak(true);
-        } else if (action === 'start-work') {
-          switchToWork(true);
-        }
-      } else if (type === 'NAVIGATE') {
-        window.location.href = path;
-      } else if (type === 'EXTEND_BREAK') {
-        setTimeLeft(prev => prev + 300);
-        setInitialDuration(prev => prev + 300);
-      }
-    };
-
-    navigator.serviceWorker.addEventListener('message', handleMessage);
-    return () => navigator.serviceWorker.removeEventListener('message', handleMessage);
-  }, [isActive, cycleCount]);
-
-  useEffect(() => {
-    if (timeLeft === 0 && (state === 'running' || state === 'paused')) {
-      setStartTime(null);
+    if (timeLeft <= 0 && isActive) {
       setIsActive(false);
       setState('idle');
-      let nextMode: TimerMode;
-      let shouldAutoStart = false;
-      if (mode === 'work') {
-        const newCount = pomodoroCount + 1;
-        const newCycleCount = cycleCount + 1;
-        setPomodoroCount(newCount);
-        setCycleCount(newCycleCount);
-        addPomodoroSession();
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
-        nextMode = (newCycleCount % 4 === 0) ? 'longBreak' : 'shortBreak';
-        if (autoStartBreaks) shouldAutoStart = true;
-      } else {
-        const breakType = mode === 'shortBreak' ? 'Short Break' : 'Long Break';
-        if ('Notification' in window && Notification.permission === 'granted') {
-          // The service worker will handle the notification
-        } else {
-          alert(`${breakType} complete! Time to get back to work.`);
-        }
-        nextMode = 'work';
-        if (autoStartPomodoros) shouldAutoStart = true;
-      }
-      setTimeout(() => {
-        if (nextMode === 'longBreak') switchToLongBreak(shouldAutoStart);
-        else if (nextMode === 'shortBreak') switchToShortBreak(shouldAutoStart);
-        else switchToWork(shouldAutoStart);
-      }, 500);
+      handleTimerCompletion();
     }
-  }, [timeLeft, state]);
-
-  const requestNotificationPermission = async (): Promise<boolean> => {
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      alert('Your browser does not support notifications.');
-      return false;
-    }
-    const permission = await Notification.requestPermission();
-    const granted = permission === 'granted';
-    setNotificationsEnabled(granted);
-    return granted;
-  };
+  }, [timeLeft, isActive, handleTimerCompletion]);
   
-  const switchToWork = (startNow = false) => { 
-    if (!isActive) { 
-      setStartTime(null);
-      setMode('work'); 
-      if(startNow) { 
-        setTimeout(() => startTimer(), 100); 
-      } 
-    } 
+  const switchToMode = (newMode: TimerMode, startNow = false) => {
+    if (state !== 'running') {
+        setMode(newMode);
+        setState('idle');
+        // The reset is now handled by the useEffect watching [mode, state]
+        if (startNow) {
+            setTimeout(() => startTimer(), 100); // Small delay to allow state to update
+        }
+    }
   };
-  const switchToShortBreak = (startNow = false) => { 
-    if (!isActive) { 
-      setStartTime(null);
-      setMode('shortBreak'); 
-      if(startNow) { 
-        setTimeout(() => startTimer(), 100); 
-      } 
-    } 
-  };
-  const switchToLongBreak = (startNow = false) => { 
-    if (!isActive) { 
-      setStartTime(null);
-      setMode('longBreak'); 
-      if(startNow) { 
-        setTimeout(() => startTimer(), 100); 
-      } 
-    } 
-  };
+
+  const switchToWork = (startNow = false) => switchToMode('work', startNow);
+  const switchToShortBreak = (startNow = false) => switchToMode('shortBreak', startNow);
+  const switchToLongBreak = (startNow = false) => switchToMode('longBreak', startNow);
   
   const getProgressPercentage = () => {
-    if (initialDuration === 0) return 100;
-    return ((initialDuration - timeLeft) / initialDuration) * 100;
+    const totalDuration = (
+      mode === 'work' ? settings.workDuration :
+      mode === 'shortBreak' ? settings.shortBreakDuration :
+      settings.longBreakDuration
+    ) * 60;
+    if (totalDuration === 0) return 100;
+    const percentage = ((totalDuration - timeLeft) / totalDuration) * 100;
+    return Math.min(100, percentage);
   };
   
   const getFormattedTime = () => {
@@ -395,48 +216,60 @@ export function PomodoroProvider({ children }: { children: ReactNode }) {
     const secs = timeLeft % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-  
+
   const getSessionInfo = () => {
-    return mode === 'work' ? 'Focus Time' : mode === 'shortBreak' ? 'Short Break' : 'Long Break';
-  };
-  
-  const requestWakeLock = async () => {
-    if ('wakeLock' in navigator) {
-      try { wakeLockRef.current = await navigator.wakeLock.request('screen'); }
-      catch (err) { console.error('Wake Lock failed:', err); }
+    if (mode === 'work') {
+      const sessionNumber = (cycleCount % settings.sessionsPerCycle) + 1;
+      return `Focus Session ${sessionNumber}`;
     }
-  };
-  const releaseWakeLock = () => {
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release().then(() => { wakeLockRef.current = null; });
+    if (mode === 'shortBreak') {
+      return 'Time for a short break!';
     }
+    if (mode === 'longBreak') {
+      return 'Time for a long break!';
+    }
+    return 'Ready to begin?';
+  };
+
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') {
+      setNotificationsEnabled(true);
+      return true;
+    }
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      const granted = permission === 'granted';
+      setNotificationsEnabled(granted);
+      return granted;
+    }
+    return false;
   };
 
   useEffect(() => {
-    const baseTitle = 'StudyForExams - Smart Study Management Platform';
-    document.title = isActive ? `${getFormattedTime()} - ${getSessionInfo()} | StudyForExams` : baseTitle;
-    // --- THIS IS THE CORRECTED LINE ---
-    return () => { document.title = baseTitle; };
-  }, [timeLeft, isActive, mode]);
-  
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      releaseWakeLock();
-    };
-  }, []);
+    localStorage.setItem('autoStartBreaks', String(autoStartBreaks));
+  }, [autoStartBreaks]);
 
-  const value: PomodoroContextType = {
+  useEffect(() => {
+    localStorage.setItem('autoStartPomodoros', String(autoStartPomodoros));
+  }, [autoStartPomodoros]);
+
+  useEffect(() => {
+    document.title = state === 'running' ? `${getFormattedTime()} - ${mode}` : 'Study Tracker';
+  }, [timeLeft, state, mode, getFormattedTime]);
+
+  const value: PomodoroContextType = useMemo(() => ({
     timeLeft, isActive, mode, state, pomodoroCount, cycleCount,
     startTimer, pauseTimer, stopTimer, resetTimer, skipSession,
     switchToWork, switchToShortBreak, switchToLongBreak,
     autoStartBreaks, autoStartPomodoros, setAutoStartBreaks, setAutoStartPomodoros,
-    notificationsEnabled, setNotificationsEnabled, requestNotificationPermission,
-    getProgressPercentage, getFormattedTime, getSessionInfo,
-    showConfetti, setShowConfetti,
-    isImmersive,
-    setIsImmersive,
-  };
+    showConfetti, isImmersive, setIsImmersive, notificationsEnabled, setNotificationsEnabled,
+    requestNotificationPermission, getProgressPercentage, getFormattedTime, getSessionInfo
+  }), [
+    timeLeft, isActive, mode, state, pomodoroCount, cycleCount, 
+    autoStartBreaks, autoStartPomodoros, showConfetti, isImmersive, notificationsEnabled,
+    getFormattedTime, getSessionInfo, getProgressPercentage
+  ]);
   
   return (
     <PomodoroContext.Provider value={value}>

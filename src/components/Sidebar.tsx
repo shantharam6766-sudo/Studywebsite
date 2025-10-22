@@ -7,7 +7,7 @@ import { Clock, AlertCircle } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { useStudyData } from '../contexts/StudyDataContext';
 
-interface NavLink {
+interface NavLinkItem {
   to: string;
   label: string;
   icon: React.ElementType;
@@ -16,7 +16,7 @@ interface NavLink {
 interface SidebarProps {
   open: boolean;
   setOpen: (open: boolean) => void;
-  navLinks: NavLink[];
+  navLinks: NavLinkItem[];
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, navLinks }) => {
@@ -31,10 +31,10 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, navLinks }) => {
     open: { opacity: 0.5, display: 'block' },
     closed: { opacity: 0, transitionEnd: { display: 'none' } }
   };
-  
+
   const today = new Date();
   const upcomingExams = exams
-    .filter(exam => differenceInDays(parseISO(exam.date), today) >= 0)
+    .filter(exam => !exam.isPlaceholder && differenceInDays(parseISO(exam.date), today) >= 0)
     .sort((a, b) => differenceInDays(parseISO(a.date), today) - differenceInDays(parseISO(b.date), today))
     .slice(0, 2);
 
@@ -53,33 +53,35 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, navLinks }) => {
         )}
       </AnimatePresence>
 
-      {/* <<< THIS IS THE ONLY CHANGE: `lg:hidden` makes it disappear on desktop >>> */}
       <motion.aside
-        className="fixed top-0 left-0 z-40 h-screen w-64 lg:w-72 xl:w-80 pt-16 glassmorphism border-r border-white/20 dark:border-slate-700/20 md:translate-x-0 lg:hidden"
+        className="fixed top-0 left-0 z-40 h-screen w-64 lg:w-72 xl:w-80 pt-16 glassmorphism border-r border-white/20 dark:border-slate-700/20 md:translate-x-0"
         initial="closed"
         animate={open ? 'open' : 'closed'}
         variants={sidebarVariants}
       >
         <div className="flex flex-col h-full p-4 lg:p-6">
           <nav className="space-y-1">
-            {navLinks.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                onClick={() => setOpen(false)}
-                className={({ isActive }) => `flex items-center px-3 py-2 lg:py-4 rounded-xl transition-all duration-200 group relative ${
-                  isActive 
-                    ? 'bg-primary/10 dark:bg-primary-light/10 text-primary dark:text-primary-light font-medium shadow-sm' 
-                    : 'hover:bg-gray-100/70 dark:hover:bg-gray-800/70 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                <span className="mr-3 lg:mr-4 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
-                  <link.icon size={20} />
-                </span>
-                <span className="font-medium text-sm lg:text-base">{link.label}</span>
-                {({ isActive }) => isActive && <div className="absolute right-2 w-2 h-2 bg-primary dark:bg-primary-light rounded-full"></div>}
-              </NavLink>
-            ))}
+            {navLinks.map((link) => {
+              const Icon = link.icon;
+              return (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  onClick={() => setOpen(false)}
+                  className={({ isActive }) => `flex items-center px-3 py-2 lg:py-4 rounded-xl transition-all duration-200 group relative ${
+                    isActive 
+                      ? 'bg-primary/10 dark:bg-primary-light/10 text-primary dark:text-primary-light font-medium shadow-sm' 
+                      : 'hover:bg-gray-100/70 dark:hover:bg-gray-800/70 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+                >
+                  <span className="mr-3 lg:mr-4 transition-transform duration-200 group-hover:scale-110 flex-shrink-0">
+                    <Icon size={20} />
+                  </span>
+                  <span className="font-medium text-sm lg:text-base">{link.label}</span>
+                  {({ isActive }) => isActive && <div className="absolute right-2 w-2 h-2 bg-primary dark:bg-primary-light rounded-full"></div>}
+                </NavLink>
+              );
+            })}
           </nav>
 
           {upcomingExams.length > 0 && (
@@ -91,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, navLinks }) => {
             >
               <div className="flex items-center gap-2 mb-3">
                 <AlertCircle size={18} className="text-primary dark:text-primary-light flex-shrink-0" />
-                <h3 className="translate-y-[8px] font-semibold text-primary dark:text-primary-light text-sm lg:text-base">Upcoming Exams</h3>
+                <h3 className="font-semibold text-primary dark:text-primary-light text-sm lg:text-base">Upcoming Exams</h3>
               </div>
               <div className="space-y-3">
                 {upcomingExams.map(exam => {
@@ -118,6 +120,6 @@ const Sidebar: React.FC<SidebarProps> = ({ open, setOpen, navLinks }) => {
       </motion.aside>
     </>
   );
-}; 
+};
 
 export default Sidebar;

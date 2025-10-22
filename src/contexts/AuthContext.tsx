@@ -1,100 +1,85 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Session, AuthError } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+
+import { Session, User } from '@supabase/supabase-js';
+import React, { useState, useEffect, createContext, useContext, ReactNode, useMemo } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 interface AuthContextType {
-  user: User | null;
   session: Session | null;
+  user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: AuthError | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  isAuthModalOpen: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signUpWithEmail: (email: string, password: string) => Promise<any>;
+  signInWithEmail: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
-    // Get initial session
+    setLoading(true);
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'SIGNED_IN') {
+        closeAuthModal();
+      }
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+      setLoading(false); 
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
-
-    if (!error && data.user) {
-      // Create user profile
-      await supabase.from('users').insert({
-        id: data.user.id,
-        email: data.user.email!,
-        full_name: fullName,
-      });
-    }
-
-    return { error };
-  };
-
-  const signIn = async (email: string, password: string) => {
-    return await supabase.auth.signInWithPassword({ email, password });
-  };
-
+  // Updated signOut to only sign out without clearing local storage
   const signOut = async () => {
     await supabase.auth.signOut();
+    // We no longer clear localStorage here to preserve the user's data cache on sign out.
   };
 
-  const resetPassword = async (email: string) => {
-    return await supabase.auth.resetPasswordForEmail(email);
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+    if (error) console.error('Error signing in with Google:', error);
   };
-
-  const value = {
-    user,
-    session,
-    loading,
-    signUp,
-    signIn,
+  
+  const signUpWithEmail = (email, password) => supabase.auth.signUp({ email, password });
+  const signInWithEmail = (email, password) => supabase.auth.signInWithPassword({ email, password });
+  const openAuthModal = () => setIsAuthModalOpen(true);
+  const closeAuthModal = () => setIsAuthModalOpen(false);
+  
+  const value = useMemo(() => ({
+    session, 
+    user, 
+    loading, 
+    isAuthModalOpen,
+    signInWithGoogle,
+    signUpWithEmail,
+    signInWithEmail,
     signOut,
-    resetPassword,
-  };
+    openAuthModal,
+    closeAuthModal,
+  }), [session, user, loading, isAuthModalOpen]);
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }

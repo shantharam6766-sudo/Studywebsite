@@ -1,3 +1,4 @@
+
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Layout from './components/Layout';
@@ -9,29 +10,34 @@ import Notes from './pages/Notes';
 import Resources from './pages/Resources';
 import Exams from './pages/Exams';
 import Progress from './pages/Progress';
+import Account from './pages/Account';
 import PomodoroWidget from './components/PomodoroWidget';
+import AuthModal from './components/AuthModal';
 import { useEffect } from 'react';
 import { useTheme } from './contexts/ThemeContext';
 import { usePomodoro } from './contexts/PomodoroContext';
+import { useAuth } from './contexts/AuthContext';
 import Confetti from 'react-confetti';
+import GlobalLoader from './components/GlobalLoader';
 
 function App() {
   const location = useLocation();
   const { theme } = useTheme();
   const { showConfetti } = usePomodoro();
+  const { loading: authLoading } = useAuth(); // Only auth loading is needed here now.
 
-  // Apply theme class to body
   useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
+
+  // Optimistic Loading: Only show the global loader for the initial, fast auth check.
+  // Data loading and syncing now happen in the background.
+  if (authLoading) {
+    return <GlobalLoader />;
+  }
 
   return (
     <>
-      {/* Global Confetti for Focus Session Completion */}
       {showConfetti && (
         <Confetti
           width={window.innerWidth}
@@ -55,12 +61,14 @@ function App() {
             <Route path="/resources" element={<Resources />} />
             <Route path="/exams" element={<Exams />} />
             <Route path="/progress" element={<Progress />} />
+            <Route path="/account" element={<Account />} />
           </Routes>
         </AnimatePresence>
         
-        {/* Floating Pomodoro Widget */}
         <PomodoroWidget />
       </Layout>
+
+      <AuthModal />
     </>
   );
 }

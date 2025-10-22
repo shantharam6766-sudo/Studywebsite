@@ -24,7 +24,6 @@ const Dashboard: React.FC = () => {
   const todayNote = notes.find(note => note.createdAt.startsWith(today));
   const todayPomodoros = pomodoroSessions.find(session => session.date === today)?.count || 0;
   
-  // This list now correctly finds ALL upcoming exams, including the placeholder if it exists.
   const upcomingExams = exams
     .filter(exam => exam.isPlaceholder || differenceInDays(parseISO(exam.date), currentTime) >= 0)
     .sort((a, b) => {
@@ -34,7 +33,6 @@ const Dashboard: React.FC = () => {
     })
     .slice(0, 2);
   
-  // --- THIS IS THE FIX: A new variable that ONLY includes upcoming, non-placeholder exams. ---
   const upcomingRealExams = exams.filter(exam => 
     !exam.isPlaceholder && differenceInDays(parseISO(exam.date), currentTime) >= 0
   );
@@ -45,11 +43,9 @@ const Dashboard: React.FC = () => {
       subject.chapters.some(chapter => chapter.status === 'studying')
     ).slice(0, 3);
 
-  // --- The quickActions array now uses our new, smarter variable ---
   const quickActions = [
     {
       title: 'Exam Schedule',
-      // The description and icon now depend on the number of UPCOMING real exams.
       description: upcomingRealExams.length > 0 ? `${upcomingRealExams.length} exams scheduled` : 'Schedule a new exam',
       icon: upcomingRealExams.length > 0 ? <Calendar size={20} /> : <PlusCircle size={20} />,
       color: 'warning',
@@ -102,7 +98,6 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Exam Countdown Cards (no changes needed here, its logic is already correct) */}
           {upcomingExams.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 2xl:gap-8 mb-6 lg:mb-8 2xl:mb-10">
               {upcomingExams.map((exam, index) => {
@@ -131,7 +126,6 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Quick Actions Grid (no changes needed) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 2xl:gap-8">
             {quickActions.map((action, index) => (
               <motion.div key={action.title} className="bg-white/70 dark:bg-gray-800/70 rounded-xl p-4 lg:p-6 2xl:p-8 hover:bg-white/90 dark:hover:bg-gray-800/90 transition-all duration-200 cursor-pointer group border border-gray-200/50 dark:border-gray-700/50" whileHover={{ y: -2, shadow: '0 10px 25px rgba(0,0,0,0.1)' }} whileTap={{ scale: 0.98 }} onClick={() => navigate(action.path)} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 * index }}>
